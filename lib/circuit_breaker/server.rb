@@ -6,7 +6,7 @@ require_relative 'remote'
 module CircuitBreaker
   class Server
     def initialize
-      @unknown_breaker = CircuitBreaker::Breaker.new
+      @unknown_breaker = CircuitBreaker::Breaker.new({})
       @breakers = Hash.new(@unknown_breaker)
       @timestamp = Time.now.to_i
     end

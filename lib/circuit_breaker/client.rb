@@ -10,7 +10,7 @@ module CircuitBreaker
   class BreakerProxy
     attr_reader :request_timeout, :tolerable_errors
 
-    def initialize(name, options={}, monitor)
+    def initialize(name, options, monitor)
       @name = name
       @options = {request_timeout: 1.0, tolerable_errors: [], monitor_sampling_fraction: 1.0}
       @options.merge!(options)
@@ -69,7 +69,7 @@ module CircuitBreaker
   class InprocBreaker < BreakerProxy
     attr_reader :underlying
 
-    def initialize(name, options={})
+    def initialize(name, options)
       super(name, options, NoopMonitor.new)
       @underlying = Breaker.new(@options)
     end
@@ -103,7 +103,7 @@ module CircuitBreaker
   class RemoteBreaker < BreakerProxy
     FALLBACK_HEALTH = Breaker::Health.new(0, 0, 0, 0)
 
-    def initialize(name, options={}, monitor, client)
+    def initialize(name, options, monitor, client)
       super(name, options, monitor)
       @client = client
       install

@@ -10,7 +10,7 @@ RSpec.describe CircuitBreaker::Breaker do
   end
 
   extend CircuitBreaker::BreakerPanel
-  @@breaker = CircuitBreaker::InprocBreaker.new(:test)
+  @@breaker = CircuitBreaker::InprocBreaker.new(:test, {})
   relay_through :faulty, @@breaker
   relay_through :smooth, @@breaker
 

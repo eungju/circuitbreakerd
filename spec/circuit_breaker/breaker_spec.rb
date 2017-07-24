@@ -4,7 +4,7 @@ require 'circuit_breaker/breaker'
 RSpec.describe CircuitBreaker::Breaker do
   before do
     Timecop.return
-    @dut = CircuitBreaker::Breaker.new()
+    @dut = CircuitBreaker::Breaker.new({})
   end
 
   it 'records success' do

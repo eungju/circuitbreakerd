@@ -10,7 +10,7 @@ module CircuitBreaker
                   :error_threshold,
                   :request_volume_threshold
 
-    def initialize(options={})
+    def initialize(options)
       @window_duration = options[:window_duration] || 10
       @sleep_window_duration = options[:sleep_window_duration] || 5
       @error_threshold = options[:error_threshold] || 0.5

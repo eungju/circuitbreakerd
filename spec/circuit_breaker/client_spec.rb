@@ -4,7 +4,7 @@ require 'circuit_breaker/client'
 RSpec.describe CircuitBreaker::InprocBreaker do
   before do
     Timecop.return
-    @dut = CircuitBreaker::InprocBreaker.new(:test)
+    @dut = CircuitBreaker::InprocBreaker.new(:test, {})
   end
 
   it 'executes the given block' do
