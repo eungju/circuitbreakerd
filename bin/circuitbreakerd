@@ -1,0 +1,69 @@
+#!/usr/bin/env ruby
+
+require "bundler/setup"
+
+require 'optparse'
+require 'ostruct'
+require 'daemons'
+
+options = OpenStruct.new
+optparse = OptionParser.new do |opt|
+  opt.on('--socket PATH') { |o| options.socket = File.absolute_path(o) }
+  opt.on('--log-dir PATH') { |o| options.log_dir = File.absolute_path(o) }
+  opt.on('--pid-file PATH') { |o| options.pid_file = File.absolute_path(o) }
+  opt.on('-d', '--daemon') { |o| options.daemon = o }
+end
+begin
+  optparse.parse!
+  mandatory = [:socket]
+  missing = mandatory.select{ |param| options[param].nil? }
+  raise OptionParser::MissingArgument, missing.join(', ') unless missing.empty?                                            #
+rescue OptionParser::ParseError => e
+  puts e
+  puts optparse
+  exit
+end
+
+pid_file = options.pid_file
+pid_dir = File.dirname(pid_file) unless pid_file.nil?
+log_dir = options.log_dir
+
+if options.daemon
+  FileUtils.mkdir_p(pid_dir)
+  FileUtils.mkdir_p(log_dir)
+  #Kill running process
+  if File.exist?(pid_file)
+    File.open(pid_file, 'r') do |f|
+      begin
+        pid = f.readline.to_i
+        Process.kill('TERM', pid)
+      rescue Errno::ESRCH, RangeError
+      end
+    end
+  end
+end
+
+Daemons.daemonize({app_name: 'circuitbreakerd',
+                   log_output: true,
+                   dir_mode: :normal,
+                   dir: pid_dir,
+                   backtrace: true,
+                   log_dir: log_dir,
+                   ontop: !options.daemon})
+
+require 'eventmachine'
+require 'logger'
+require 'circuit_breaker/server'
+
+logger = Logger.new(STDOUT)
+
+EventMachine.run {
+  Signal.trap('INT') { EventMachine.stop }
+  Signal.trap('TERM') { EventMachine.stop }
+
+  server = CircuitBreaker::Server.new
+  EventMachine.add_periodic_timer(0.1) do
+    server.maintain
+  end
+  EventMachine.start_server options.socket, CircuitBreaker::RespHandler, server, logger
+}
