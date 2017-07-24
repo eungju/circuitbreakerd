@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/eungju/circuitbreakerd.svg?branch=master)](https://travis-ci.org/eungju/circuitbreakerd)
+
 # Circuitbreakerd
 
 ## Installation
