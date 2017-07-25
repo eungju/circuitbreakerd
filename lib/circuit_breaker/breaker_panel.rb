@@ -4,15 +4,17 @@ require_relative 'client'
 module CircuitBreaker
   module BreakerPanel
     @@client = nil
+    @@logger = nil
     @@monitor = nil
 
-    def self.initialize(client, monitor)
+    def self.initialize(client, logger, monitor)
       @@client = client
+      @@logger = logger
       @@monitor = monitor
     end
 
     def install_breaker(name, options={})
-      RemoteBreaker.new(name, options, @@monitor, @@client)
+      RemoteBreaker.new(name, options, @@logger, @@monitor, @@client)
     end
 
     def relay_through(target_method, breaker)

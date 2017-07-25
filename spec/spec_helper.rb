@@ -3,6 +3,9 @@ require "bundler/setup"
 require 'simplecov'
 SimpleCov.start 'rails'
 
+require "logger"
+$logger = Logger.new(STDOUT)
+
 require "timecop"
 
 RSpec.configure do |config|

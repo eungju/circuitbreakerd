@@ -10,13 +10,14 @@ module CircuitBreaker
   class BreakerProxy
     attr_reader :request_timeout, :tolerable_errors
 
-    def initialize(name, options, monitor)
+    def initialize(name, options, logger, monitor)
       @name = name
       @options = {request_timeout: 1.0, tolerable_errors: [], monitor_sampling_fraction: 1.0}
       @options.merge!(options)
       @request_timeout = @options[:request_timeout]
       @tolerable_errors = @options[:tolerable_errors].dup
       @monitor_sampling_fraction = @options[:monitor_sampling_fraction]
+      @logger = logger
       @monitor = monitor
       @state = :closed
     end
@@ -24,7 +25,7 @@ module CircuitBreaker
     def request
       allow = allow_request?
       state = allow ? :closed : :open
-      #logger.warn("Circuit #{@name} changed the state to #{state}") if @state != state
+      @logger.warn("Circuit #{@name} changed the state to #{state}") if @state != state
       @state = state
       started_at = Time.now
       if allow
@@ -69,8 +70,8 @@ module CircuitBreaker
   class InprocBreaker < BreakerProxy
     attr_reader :underlying
 
-    def initialize(name, options)
-      super(name, options, NoopMonitor.new)
+    def initialize(name, options, logger)
+      super(name, options, logger, NoopMonitor.new)
       @underlying = Breaker.new(@options)
     end
 
@@ -103,8 +104,8 @@ module CircuitBreaker
   class RemoteBreaker < BreakerProxy
     FALLBACK_HEALTH = Breaker::Health.new(0, 0, 0, 0)
 
-    def initialize(name, options, monitor, client)
-      super(name, options, monitor)
+    def initialize(name, options, logger, monitor, client)
+      super(name, options, logger, monitor)
       @client = client
       install
     end
@@ -157,7 +158,7 @@ module CircuitBreaker
       begin
         yield
       rescue
-        #logger.error('CircuitBreaker is unreachable')
+        @logger.error('CircuitBreaker is unreachable')
         fallback
       end
     end
