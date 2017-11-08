@@ -12,5 +12,10 @@
 .rspec_status
 coverage
 
+/*.gem
+
+.ruby-version
+
 .idea
 *.iml
+
