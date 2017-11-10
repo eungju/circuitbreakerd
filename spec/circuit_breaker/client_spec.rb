@@ -4,7 +4,7 @@ require 'circuit_breaker/client'
 RSpec.describe CircuitBreaker::InprocBreaker do
   before do
     Timecop.return
-    @dut = CircuitBreaker::InprocBreaker.new(:test, {}, $logger)
+    @dut = CircuitBreaker::InprocBreaker.new(:test, {}, $logger, CircuitBreaker::NoopMonitor.new)
   end
 
   it 'executes the given block' do
@@ -19,16 +19,16 @@ RSpec.describe CircuitBreaker::InprocBreaker do
 
   it 'records a request as success' do
     @dut.request {}
-    expect(@dut.health.success).to eq(1)
-    expect(@dut.health.failure).to eq(0)
+    expect(@dut.metrics.success).to eq(1)
+    expect(@dut.metrics.failure).to eq(0)
   end
 
   it 'records a request as failure when the request throws error' do
     begin
       @dut.request { raise StandardError }
     rescue
-      expect(@dut.health.success).to eq(0)
-      expect(@dut.health.failure).to eq(1)
+      expect(@dut.metrics.success).to eq(0)
+      expect(@dut.metrics.failure).to eq(1)
     else
       fail
     end
@@ -36,9 +36,9 @@ RSpec.describe CircuitBreaker::InprocBreaker do
 
   it 'records a request as timeout when the request exeeds timeout' do
     @dut.request { Timecop.travel(@dut.request_timeout + 0.1) }
-    expect(@dut.health.timeout).to eq(1)
-    expect(@dut.health.success).to eq(0)
-    expect(@dut.health.failure).to eq(0)
+    expect(@dut.metrics.timeout).to eq(1)
+    expect(@dut.metrics.success).to eq(0)
+    expect(@dut.metrics.failure).to eq(0)
   end
 
   it 'allows some kind of errors' do
@@ -46,8 +46,8 @@ RSpec.describe CircuitBreaker::InprocBreaker do
     begin
       @dut.request { raise EOFError }
     rescue EOFError
-      expect(@dut.health.failure).to eq(0)
-      expect(@dut.health.success).to eq(1)
+      expect(@dut.metrics.failure).to eq(0)
+      expect(@dut.metrics.success).to eq(1)
     end
   end
 
@@ -63,9 +63,9 @@ RSpec.describe CircuitBreaker::InprocBreaker do
       @dut.request { work += 1 }
     rescue CircuitBreaker::ShortCircuitedError
       expect(work).to eq(0)
-      expect(@dut.health.short_circuited).to eq(1)
-      expect(@dut.health.success).to eq(5)
-      expect(@dut.health.failure).to eq(5)
+      expect(@dut.metrics.short_circuited).to eq(1)
+      expect(@dut.metrics.success).to eq(5)
+      expect(@dut.metrics.failure).to eq(5)
     else
       fail
     end

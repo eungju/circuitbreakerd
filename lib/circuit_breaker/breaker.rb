@@ -1,3 +1,5 @@
+require 'quantile'
+
 module CircuitBreaker
   class Breaker
     EVENT_SUCCESS = 'success'.freeze
@@ -23,6 +25,11 @@ module CircuitBreaker
       @buckets_timeout = 0
       @buckets_short_circuted = 0
       @last_error_at = 0
+
+      @percentile_estimator = Quantile::Estimator.new(Quantile::Quantile.new(0.5, 0.05),
+                                                      Quantile::Quantile.new(0.90, 0.01),
+                                                      Quantile::Quantile.new(0.99, 0.001),
+                                                      Quantile::Quantile.new(0.995, 0.0005))
     end
 
     def allow_request?
@@ -36,11 +43,17 @@ module CircuitBreaker
       @bucket.timestamp - @last_error_at >= @sleep_window_duration
     end
 
-    def health
-      Health.new(@buckets_success + @bucket.success,
-                 @buckets_failure + @bucket.failure,
-                 @buckets_timeout + @bucket.timeout,
-                 @buckets_short_circuted + @bucket.short_circuited)
+    def metrics
+      latency_percentiles = Hash.new
+      @percentile_estimator.invariants.each { |invariant|
+        latency_percentiles[invariant.quantile] = @percentile_estimator.query(invariant.quantile)
+      }
+      Metrics.new(@buckets_success + @bucket.success,
+                  @buckets_failure + @bucket.failure,
+                  @buckets_timeout + @bucket.timeout,
+                  @buckets_short_circuted + @bucket.short_circuited,
+                  @percentile_estimator.sum, @percentile_estimator.observations,
+                  latency_percentiles)
     end
 
     def slide(t)
@@ -48,7 +61,7 @@ module CircuitBreaker
         @buckets.push @bucket
         @bucket = Bucket.new(t)
         window_start = @bucket.timestamp - @window_duration + 1
-        @buckets = @buckets.drop_while { |bucket| bucket.timestamp < window_start }
+        @buckets = @buckets.drop_while {|bucket| bucket.timestamp < window_start}
         @buckets_success = 0
         @buckets_failure = 0
         @buckets_timeout = 0
@@ -62,25 +75,30 @@ module CircuitBreaker
       end
     end
 
-    def record_success
+    def record_success(latency)
       @bucket.hit_success
+      @percentile_estimator.observe(latency)
     end
 
-    def record_failure
+    def record_failure(latency)
       @bucket.hit_failure
       @last_error_at = @bucket.timestamp
+      @percentile_estimator.observe(latency)
     end
 
-    def record_timeout
+    def record_timeout(latency)
       @bucket.hit_timeout
       @last_error_at = @bucket.timestamp
+      @percentile_estimator.observe(latency)
     end
 
     def record_short_circuited
       @bucket.hit_short_circuited
     end
 
-    Health = Struct.new(:success, :failure, :timeout, :short_circuited)
+    Metrics = Struct.new(:success, :failure, :timeout, :short_circuited,
+                         :latency_sum, :latency_count,
+                         :latency_percentiles)
 
     class Bucket
       attr_reader :timestamp, :success, :failure, :timeout, :short_circuited
@@ -93,15 +111,25 @@ module CircuitBreaker
         @short_circuited = 0
       end
 
-      def error; @failure + @timeout end
+      def error;
+        @failure + @timeout
+      end
 
-      def hit_success; @success += 1 end
+      def hit_success;
+        @success += 1
+      end
 
-      def hit_failure; @failure += 1 end
+      def hit_failure;
+        @failure += 1
+      end
 
-      def hit_timeout; @timeout += 1 end
+      def hit_timeout;
+        @timeout += 1
+      end
 
-      def hit_short_circuited; @short_circuited += 1 end
+      def hit_short_circuited;
+        @short_circuited += 1
+      end
     end
   end
 end

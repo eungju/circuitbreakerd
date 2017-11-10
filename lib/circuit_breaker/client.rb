@@ -35,7 +35,7 @@ module CircuitBreaker
           if @tolerable_errors.any? { |error_class| e.kind_of?(error_class) }
             handle_success(started_at)
           else
-            record_failure
+            record_failure(Time.now - started_at)
             monitor_request(Breaker::EVENT_FAILURE, started_at)
           end
           raise
@@ -44,7 +44,7 @@ module CircuitBreaker
           v
         end
       else
-        record_short_circuited
+        record_short_circuited()
         monitor_request(Breaker::EVENT_SHORT_CIRCUITED, started_at)
         raise ShortCircuitedError
       end
@@ -53,10 +53,10 @@ module CircuitBreaker
     def handle_success(started_at)
       latency = Time.now - started_at
       if latency > @request_timeout
-        record_timeout
+        record_timeout(latency)
         monitor_request(Breaker::EVENT_TIMEOUT, started_at)
       else
-        record_success
+        record_success(latency)
         monitor_request(Breaker::EVENT_SUCCESS, started_at)
       end
     end
@@ -70,8 +70,8 @@ module CircuitBreaker
   class InprocBreaker < BreakerProxy
     attr_reader :underlying
 
-    def initialize(name, options, logger)
-      super(name, options, logger, NoopMonitor.new)
+    def initialize(name, options, logger, monitor)
+      super(name, options, logger, monitor)
       @underlying = Breaker.new(@options)
     end
 
@@ -80,29 +80,29 @@ module CircuitBreaker
       @underlying.allow_request?
     end
 
-    def record_success
-      @underlying.record_success
+    def record_success(latency)
+      @underlying.record_success(latency)
     end
 
-    def record_failure
-      @underlying.record_failure
+    def record_failure(latency)
+      @underlying.record_failure(latency)
     end
 
-    def record_timeout
-      @underlying.record_timeout
+    def record_timeout(latency)
+      @underlying.record_timeout(latency)
     end
 
     def record_short_circuited
-      @underlying.record_short_circuited
+      @underlying.record_short_circuited()
     end
 
-    def health
-      @underlying.health
+    def metrics
+      @underlying.metrics
     end
   end
 
   class RemoteBreaker < BreakerProxy
-    FALLBACK_HEALTH = Breaker::Health.new(0, 0, 0, 0)
+    FALLBACK_METRICS = Breaker::Metrics.new(0, 0, 0, 0)
 
     def initialize(name, options, logger, monitor, client)
       super(name, options, logger, monitor)
@@ -122,21 +122,21 @@ module CircuitBreaker
       end
     end
 
-    def record_success
+    def record_success(latency)
       resilient(nil) do
-        @client.record_success(@name)
+        @client.record_success(@name, latency)
       end
     end
 
-    def record_failure
+    def record_failure(latency)
       resilient(nil) do
-        @client.record_failure(@name)
+        @client.record_failure(@name, latency)
       end
     end
 
-    def record_timeout
+    def record_timeout(latency)
       resilient(nil) do
-        @client.record_timeout(@name)
+        @client.record_timeout(@name, latency)
       end
     end
 
@@ -146,9 +146,9 @@ module CircuitBreaker
       end
     end
 
-    def health
-      resilient(FALLBACK_HEALTH) do
-        @client.health(@name)
+    def metrics
+      resilient(FALLBACK_METRICS) do
+        @client.metrics(@name)
       end
     end
 
@@ -212,35 +212,46 @@ module CircuitBreaker
       end
     end
 
-    def record(name, event)
+    def record(name, event, latency)
       synchronize do |client|
-        client.call([COMMAND_RECORD, name, event])
+        client.call([COMMAND_RECORD, name, event, latency])
       end
     end
 
-    def record_success(name)
-      record(name, EVENT_SUCCESS)
+    def record_success(name, latency)
+      record(name, EVENT_SUCCESS, latency)
     end
 
-    def record_failure(name)
-      record(name, EVENT_FAILURE)
+    def record_failure(name, latency)
+      record(name, EVENT_FAILURE, latency)
     end
 
-    def record_timeout(name)
-      record(name, EVENT_TIMEOUT)
+    def record_timeout(name, latency)
+      record(name, EVENT_TIMEOUT, latency)
     end
 
     def record_short_circuited(name)
-      record(name, EVENT_SHORT_CIRCUITED)
+      record(name, EVENT_SHORT_CIRCUITED, 0)
     end
 
-    # Get the health metrics in a hash.
+    # Get the metrics in a hash.
     #
     # @param [String] name
     # @return [Hash<String, Object>]
-    def health(name)
+    def metrics(name)
       synchronize do |client|
-        client.call([COMMAND_HEALTH, name], &Hashify)
+        r = client.call([COMMAND_METRICS, name], &Hashify)
+        latency_percentiles = Hash.new
+        r[LATENCY_PERCENTILES].each_slice(2) do |field, value|
+          latency_percentiles[Floatify.call(field)] = Floatify.call(value)
+        end
+        Breaker::Metrics.new(r[EVENT_SUCCESS],
+                             r[EVENT_FAILURE],
+                             r[EVENT_TIMEOUT],
+                             r[EVENT_SHORT_CIRCUITED],
+                             r[LATENCY_SUM],
+                             r[LATENCY_COUNT],
+                             latency_percentiles)
       end
     end
 

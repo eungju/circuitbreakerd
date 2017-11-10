@@ -34,24 +34,24 @@ module CircuitBreaker
       @breakers[name].allow_request?
     end
 
-    def record_success(name)
-      @breakers[name].record_success
+    def record_success(name, latency)
+      @breakers[name].record_success(latency)
     end
 
-    def record_failure(name)
-      @breakers[name].record_failure
+    def record_failure(name, latency)
+      @breakers[name].record_failure(latency)
     end
 
-    def record_timeout(name)
-      @breakers[name].record_timeout
+    def record_timeout(name, latency)
+      @breakers[name].record_timeout(latency)
     end
 
     def record_short_circuited(name)
-      @breakers[name].record_short_circuited
+      @breakers[name].record_short_circuited()
     end
 
-    def health(name)
-      @breakers[name].health
+    def metrics(name)
+      @breakers[name].metrics
     end
 
     def breakers
@@ -102,8 +102,8 @@ module CircuitBreaker
         handle_allow_request(args)
       elsif command == COMMAND_RECORD
         handle_record(args)
-      elsif command == COMMAND_HEALTH
-        handle_health(args)
+      elsif command == COMMAND_METRICS
+        handle_metrics(args)
       elsif command == COMMAND_BREAKERS
         handle_breakers(args)
       elsif command == COMMAND_PING
@@ -137,12 +137,13 @@ module CircuitBreaker
     def handle_record(args)
       name = args[0]
       event = args[1].downcase
+      latency = args.size >= 3 ? args[2].to_f : 0.0
       if event == EVENT_SUCCESS
-        @server.record_success(name)
+        @server.record_success(name, latency)
       elsif event == EVENT_FAILURE
-        @server.record_failure(name)
+        @server.record_failure(name, latency)
       elsif event == EVENT_TIMEOUT
-        @server.record_timeout(name)
+        @server.record_timeout(name, latency)
       elsif event == EVENT_SHORT_CIRCUITED
         @server.record_short_circuited(name)
       else
@@ -152,17 +153,21 @@ module CircuitBreaker
       send_data resp_simple_string(RESPONSE_OK)
     end
 
-    def handle_health(args)
+    def handle_metrics(args)
       name = args[0]
-      health = @server.health(name)
-      send_data resp_array([resp_bulk_string(EVENT_SUCCESS), resp_integer(health.success),
-                            resp_bulk_string(EVENT_FAILURE), resp_integer(health.failure),
-                            resp_bulk_string(EVENT_TIMEOUT), resp_integer(health.timeout),
-                            resp_bulk_string(EVENT_SHORT_CIRCUITED), resp_integer(health.short_circuited)])
+      metrics = @server.metrics(name)
+      send_data resp_array([resp_simple_string(EVENT_SUCCESS), resp_integer(metrics.success),
+                            resp_simple_string(EVENT_FAILURE), resp_integer(metrics.failure),
+                            resp_simple_string(EVENT_TIMEOUT), resp_integer(metrics.timeout),
+                            resp_simple_string(EVENT_SHORT_CIRCUITED), resp_integer(metrics.short_circuited),
+                            resp_simple_string(LATENCY_SUM), resp_simple_string(metrics.latency_sum.to_s),
+                            resp_simple_string(LATENCY_COUNT), resp_integer(metrics.latency_count),
+                            resp_simple_string(LATENCY_PERCENTILES),
+                            resp_array(metrics.latency_percentiles.map { |k, v| [resp_simple_string(k.to_s), resp_simple_string((v || 0).to_s)] }.flatten)])
     end
 
     def handle_breakers(args)
-      send_data resp_array(@server.breakers.map { |name| resp_bulk_string(name) })
+      send_data resp_array(@server.breakers.map { |name| resp_simple_string(name) })
     end
 
     def handle_ping(args)
