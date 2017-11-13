@@ -27,5 +27,13 @@ module CircuitBreaker
       alias_method "#{guid}_#{target_method}", target_method
       alias_method target_method, "#{guid}"
     end
+
+    def metrics
+      result = Hash.new
+      @@client.breakers.each { |name|
+        result[name] = @@client.metrics(name)
+      }
+      result
+    end
   end
 end

@@ -18,5 +18,6 @@ module CircuitBreaker
     LATENCY_SUM = 'latency_sum'.freeze
     LATENCY_COUNT = 'latency_count'.freeze
     LATENCY_PERCENTILES = 'latency_percentiles'.freeze
+    LATENCY_BUCKETS = 'latency_buckets'.freeze
   end
 end

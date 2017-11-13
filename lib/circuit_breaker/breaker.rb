@@ -26,10 +26,15 @@ module CircuitBreaker
       @buckets_short_circuted = 0
       @last_error_at = 0
 
-      @percentile_estimator = Quantile::Estimator.new(Quantile::Quantile.new(0.5, 0.05),
-                                                      Quantile::Quantile.new(0.90, 0.01),
-                                                      Quantile::Quantile.new(0.99, 0.001),
-                                                      Quantile::Quantile.new(0.995, 0.0005))
+      @latency_percentiles = Quantile::Estimator.new(Quantile::Quantile.new(0.5, 0.05),
+                                                     Quantile::Quantile.new(0.90, 0.01),
+                                                     Quantile::Quantile.new(0.99, 0.001),
+                                                     Quantile::Quantile.new(0.995, 0.0005))
+      @latency_histogram = Histogram.new([0.005,
+                                          0.01, 0.025, 0.05, 0.075,
+                                          0.1, 0.25, 0.5, 0.75,
+                                          1, 2.5, 5, 7.5,
+                                          10, Float::INFINITY])
     end
 
     def allow_request?
@@ -45,15 +50,20 @@ module CircuitBreaker
 
     def metrics
       latency_percentiles = Hash.new
-      @percentile_estimator.invariants.each { |invariant|
-        latency_percentiles[invariant.quantile] = @percentile_estimator.query(invariant.quantile)
+      @latency_percentiles.invariants.each { |invariant|
+        latency_percentiles[invariant.quantile] = @latency_percentiles.query(invariant.quantile)
+      }
+      latency_buckets = Hash.new
+      @latency_histogram.upper_bounds.zip(@latency_histogram.cumulative_counts).each { |each|
+        latency_buckets[each[0]] = each[1]
       }
       Metrics.new(@buckets_success + @bucket.success,
                   @buckets_failure + @bucket.failure,
                   @buckets_timeout + @bucket.timeout,
                   @buckets_short_circuted + @bucket.short_circuited,
-                  @percentile_estimator.sum, @percentile_estimator.observations,
-                  latency_percentiles)
+                  @latency_percentiles.observations, @latency_percentiles.sum,
+                  latency_percentiles,
+                  latency_buckets)
     end
 
     def slide(t)
@@ -77,19 +87,22 @@ module CircuitBreaker
 
     def record_success(latency)
       @bucket.hit_success
-      @percentile_estimator.observe(latency)
+      @latency_percentiles.observe(latency)
+      @latency_histogram.observe(latency)
     end
 
     def record_failure(latency)
       @bucket.hit_failure
       @last_error_at = @bucket.timestamp
-      @percentile_estimator.observe(latency)
+      @latency_percentiles.observe(latency)
+      @latency_histogram.observe(latency)
     end
 
     def record_timeout(latency)
       @bucket.hit_timeout
       @last_error_at = @bucket.timestamp
-      @percentile_estimator.observe(latency)
+      @latency_percentiles.observe(latency)
+      @latency_histogram.observe(latency)
     end
 
     def record_short_circuited
@@ -97,8 +110,9 @@ module CircuitBreaker
     end
 
     Metrics = Struct.new(:success, :failure, :timeout, :short_circuited,
-                         :latency_sum, :latency_count,
-                         :latency_percentiles)
+                         :latency_count, :latency_sum,
+                         :latency_percentiles,
+                         :latency_buckets)
 
     class Bucket
       attr_reader :timestamp, :success, :failure, :timeout, :short_circuited
@@ -111,25 +125,44 @@ module CircuitBreaker
         @short_circuited = 0
       end
 
-      def error;
+      def error
         @failure + @timeout
       end
 
-      def hit_success;
+      def hit_success
         @success += 1
       end
 
-      def hit_failure;
+      def hit_failure
         @failure += 1
       end
 
-      def hit_timeout;
+      def hit_timeout
         @timeout += 1
       end
 
-      def hit_short_circuited;
+      def hit_short_circuited
         @short_circuited += 1
       end
+    end
+  end
+
+  class Histogram
+    attr_reader :upper_bounds, :cumulative_counts, :sum
+
+    def initialize(buckets)
+      @upper_bounds = buckets
+      @cumulative_counts = @upper_bounds.map {0}
+      @sum = 0
+    end
+
+    def observe(value)
+      @upper_bounds.each_with_index {|ub, i|
+        if value <= ub
+          @cumulative_counts[i] += 1
+        end
+      }
+      @sum += value
     end
   end
 end
