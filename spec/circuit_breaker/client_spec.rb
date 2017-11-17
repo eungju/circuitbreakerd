@@ -61,11 +61,12 @@ RSpec.describe CircuitBreaker::InprocBreaker do
     work = 0
     begin
       @dut.request { work += 1 }
-    rescue CircuitBreaker::ShortCircuitedError
+    rescue CircuitBreaker::ShortCircuitedError => e
       expect(work).to eq(0)
       expect(@dut.metrics.short_circuited).to eq(1)
       expect(@dut.metrics.success).to eq(5)
       expect(@dut.metrics.failure).to eq(5)
+      expect(e.message).to eq("test is open")
     else
       fail
     end

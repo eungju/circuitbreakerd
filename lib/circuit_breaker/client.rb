@@ -32,38 +32,38 @@ module CircuitBreaker
         begin
           v = yield
         rescue => e
+          latency = Time.now - started_at
           if @tolerable_errors.any? { |error_class| e.kind_of?(error_class) }
-            handle_success(started_at)
+            handle_success(latency)
           else
-            record_failure(Time.now - started_at)
-            monitor_request(Breaker::EVENT_FAILURE, started_at)
+            record_failure(latency)
+            monitor_request(Breaker::EVENT_FAILURE, latency)
           end
           raise
         else
-          handle_success(started_at)
+          handle_success(Time.now - started_at)
           v
         end
       else
-        record_short_circuited()
-        monitor_request(Breaker::EVENT_SHORT_CIRCUITED, started_at)
+        record_short_circuited
+        monitor_request(Breaker::EVENT_SHORT_CIRCUITED, 0)
         raise ShortCircuitedError, "#@name is open"
       end
     end
 
-    def handle_success(started_at)
-      latency = Time.now - started_at
+    def handle_success(latency)
       if latency > @request_timeout
         record_timeout(latency)
-        monitor_request(Breaker::EVENT_TIMEOUT, started_at)
+        monitor_request(Breaker::EVENT_TIMEOUT, latency)
       else
         record_success(latency)
-        monitor_request(Breaker::EVENT_SUCCESS, started_at)
+        monitor_request(Breaker::EVENT_SUCCESS, latency)
       end
     end
 
-    def monitor_request(event, started_at)
+    def monitor_request(event, latency)
       sample = @monitor_sampling_fraction == 1.0 || Random.rand < @monitor_sampling_fraction
-      @monitor.record_request(@name, event, Time.now - started_at) if sample
+      @monitor.record_request(@name, event, latency) if sample
     end
   end
 
