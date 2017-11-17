@@ -24,6 +24,10 @@ module CircuitBreaker
       @buckets_short_circuted = 0
       @last_error_at = 0
 
+      @success_count = 0
+      @failure_count = 0
+      @timeout_count = 0
+      @short_circuited_count = 0
       @latency_histogram = Histogram.new([0.005,
                                           0.01, 0.025, 0.05, 0.075,
                                           0.1, 0.25, 0.5, 0.75,
@@ -42,15 +46,22 @@ module CircuitBreaker
       @bucket.timestamp - @last_error_at >= @sleep_window_duration
     end
 
+    def health
+      Health.new(@buckets_success + @bucket.success,
+                 @buckets_failure + @bucket.failure,
+                 @buckets_timeout + @bucket.timeout,
+                 @buckets_short_circuted + @bucket.short_circuited)
+    end
+
     def metrics
       latency_buckets = Hash.new
       @latency_histogram.upper_bounds.zip(@latency_histogram.cumulative_counts).each { |each|
         latency_buckets[each[0]] = each[1]
       }
-      Metrics.new(@buckets_success + @bucket.success,
-                  @buckets_failure + @bucket.failure,
-                  @buckets_timeout + @bucket.timeout,
-                  @buckets_short_circuted + @bucket.short_circuited,
+      Metrics.new(@success_count,
+                  @failure_count,
+                  @timeout_count,
+                  @short_circuited_count,
                   @latency_histogram.observations, @latency_histogram.sum,
                   latency_buckets)
     end
@@ -76,24 +87,30 @@ module CircuitBreaker
 
     def record_success(latency)
       @bucket.hit_success
+      @success_count += 1
       @latency_histogram.observe(latency)
     end
 
     def record_failure(latency)
       @bucket.hit_failure
       @last_error_at = @bucket.timestamp
+      @failure_count += 1
       @latency_histogram.observe(latency)
     end
 
     def record_timeout(latency)
       @bucket.hit_timeout
       @last_error_at = @bucket.timestamp
+      @timeout_count += 1
       @latency_histogram.observe(latency)
     end
 
     def record_short_circuited
+      @short_circuited_count += 1
       @bucket.hit_short_circuited
     end
+
+    Health = Struct.new(:success, :failure, :timeout, :short_circuited)
 
     Metrics = Struct.new(:success, :failure, :timeout, :short_circuited,
                          :latency_count, :latency_sum,

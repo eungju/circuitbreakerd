@@ -9,28 +9,28 @@ RSpec.describe CircuitBreaker::Breaker do
 
   it 'records success' do
     @dut.record_success(0.01)
-    expect(@dut.metrics.success).to eq(1)
-    expect(@dut.metrics.failure).to eq(0)
+    expect(@dut.health.success).to eq(1)
+    expect(@dut.health.failure).to eq(0)
   end
 
   it 'records failure' do
     @dut.record_failure(0.01)
-    expect(@dut.metrics.success).to eq(0)
-    expect(@dut.metrics.failure).to eq(1)
+    expect(@dut.health.success).to eq(0)
+    expect(@dut.health.failure).to eq(1)
   end
 
   it 'records timeout' do
     @dut.record_timeout(0.01)
-    expect(@dut.metrics.timeout).to eq(1)
-    expect(@dut.metrics.success).to eq(0)
-    expect(@dut.metrics.failure).to eq(0)
+    expect(@dut.health.timeout).to eq(1)
+    expect(@dut.health.success).to eq(0)
+    expect(@dut.health.failure).to eq(0)
   end
 
   it 'records short-circuited' do
     @dut.record_short_circuited()
-    expect(@dut.metrics.short_circuited).to eq(1)
-    expect(@dut.metrics.success).to eq(0)
-    expect(@dut.metrics.failure).to eq(0)
+    expect(@dut.health.short_circuited).to eq(1)
+    expect(@dut.health.success).to eq(0)
+    expect(@dut.health.failure).to eq(0)
   end
 
   it 'trips to open when the error threshold reached by failures' do
@@ -43,8 +43,8 @@ RSpec.describe CircuitBreaker::Breaker do
       end
     end
     expect(@dut.allow_request?).to eq(false)
-    expect(@dut.metrics.success).to eq(5)
-    expect(@dut.metrics.failure).to eq(5)
+    expect(@dut.health.success).to eq(5)
+    expect(@dut.health.failure).to eq(5)
   end
 
   it 'keeps closed when the request volume threshold has not reached' do
@@ -53,8 +53,8 @@ RSpec.describe CircuitBreaker::Breaker do
       @dut.record_failure(0.01)
     end
     expect(@dut.allow_request?).to eq(true)
-    expect(@dut.metrics.success).to eq(0)
-    expect(@dut.metrics.failure).to eq(9)
+    expect(@dut.health.success).to eq(0)
+    expect(@dut.health.failure).to eq(9)
   end
 
   it 'discards samples older than window duration' do
@@ -67,8 +67,8 @@ RSpec.describe CircuitBreaker::Breaker do
       end
       Timecop.travel(1)
     end
-    expect(@dut.metrics.success).to eq(@dut.window_duration - 1)
-    expect(@dut.metrics.failure).to eq(1)
+    expect(@dut.health.success).to eq(@dut.window_duration - 1)
+    expect(@dut.health.failure).to eq(1)
   end
 
   it 'keeps open when the reset attempt failed' do
