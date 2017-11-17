@@ -46,7 +46,7 @@ module CircuitBreaker
       else
         record_short_circuited()
         monitor_request(Breaker::EVENT_SHORT_CIRCUITED, started_at)
-        raise ShortCircuitedError
+        raise ShortCircuitedError, "#@name is open"
       end
     end
 
