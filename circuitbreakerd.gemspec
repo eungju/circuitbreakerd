@@ -38,6 +38,5 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency "hiredis", "~> 0.6"
   spec.add_runtime_dependency "redis", "~> 3.2"
   spec.add_runtime_dependency "influxdb", "~> 0.3"
-  spec.add_runtime_dependency "quantile", "~> 0.2.0"
   spec.add_runtime_dependency "daemons", "~> 1.2"
 end

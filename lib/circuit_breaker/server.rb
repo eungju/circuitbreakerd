@@ -162,7 +162,6 @@ module CircuitBreaker
                             resp_simple_string(EVENT_SHORT_CIRCUITED), resp_integer(metrics.short_circuited),
                             resp_simple_string(LATENCY_SUM), resp_simple_string(metrics.latency_sum.to_s),
                             resp_simple_string(LATENCY_COUNT), resp_integer(metrics.latency_count),
-                            resp_simple_string(LATENCY_PERCENTILES), resp_array(metrics.latency_percentiles.map { |k, v| [resp_simple_string(k.to_s), resp_simple_string((v || 0).to_s)] }.flatten),
                             resp_simple_string(LATENCY_BUCKETS), resp_array(metrics.latency_buckets.map { |k, v| [resp_simple_string(k.to_s), resp_simple_string((v || 0).to_s)] }.flatten)])
     end
 

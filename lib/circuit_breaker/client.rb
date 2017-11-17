@@ -102,7 +102,7 @@ module CircuitBreaker
   end
 
   class RemoteBreaker < BreakerProxy
-    FALLBACK_METRICS = Breaker::Metrics.new(0, 0, 0, 0, 0, 0, {}, {})
+    FALLBACK_METRICS = Breaker::Metrics.new(0, 0, 0, 0, 0, 0, {})
 
     def initialize(name, options, logger, monitor, client)
       super(name, options, logger, monitor)
@@ -241,10 +241,6 @@ module CircuitBreaker
     def metrics(name)
       synchronize do |client|
         r = client.call([COMMAND_METRICS, name], &Hashify)
-        latency_percentiles = Hash.new
-        r[LATENCY_PERCENTILES].each_slice(2) do |field, value|
-          latency_percentiles[Floatify.call(field)] = Floatify.call(value)
-        end
         latency_buckets = Hash.new
         r[LATENCY_BUCKETS].each_slice(2) do |field, value|
           latency_buckets[Floatify.call(field)] = Floatify.call(value)
@@ -255,7 +251,6 @@ module CircuitBreaker
                              r[EVENT_SHORT_CIRCUITED],
                              r[LATENCY_COUNT],
                              r[LATENCY_SUM],
-                             latency_percentiles,
                              latency_buckets)
       end
     end

@@ -1,5 +1,3 @@
-require 'quantile'
-
 module CircuitBreaker
   class Breaker
     EVENT_SUCCESS = 'success'.freeze
@@ -26,10 +24,6 @@ module CircuitBreaker
       @buckets_short_circuted = 0
       @last_error_at = 0
 
-      @latency_percentiles = Quantile::Estimator.new(Quantile::Quantile.new(0.5, 0.05),
-                                                     Quantile::Quantile.new(0.90, 0.01),
-                                                     Quantile::Quantile.new(0.99, 0.001),
-                                                     Quantile::Quantile.new(0.995, 0.0005))
       @latency_histogram = Histogram.new([0.005,
                                           0.01, 0.025, 0.05, 0.075,
                                           0.1, 0.25, 0.5, 0.75,
@@ -49,10 +43,6 @@ module CircuitBreaker
     end
 
     def metrics
-      latency_percentiles = Hash.new
-      @latency_percentiles.invariants.each { |invariant|
-        latency_percentiles[invariant.quantile] = @latency_percentiles.query(invariant.quantile)
-      }
       latency_buckets = Hash.new
       @latency_histogram.upper_bounds.zip(@latency_histogram.cumulative_counts).each { |each|
         latency_buckets[each[0]] = each[1]
@@ -61,8 +51,7 @@ module CircuitBreaker
                   @buckets_failure + @bucket.failure,
                   @buckets_timeout + @bucket.timeout,
                   @buckets_short_circuted + @bucket.short_circuited,
-                  @latency_percentiles.observations, @latency_percentiles.sum,
-                  latency_percentiles,
+                  @latency_histogram.observations, @latency_histogram.sum,
                   latency_buckets)
     end
 
@@ -87,21 +76,18 @@ module CircuitBreaker
 
     def record_success(latency)
       @bucket.hit_success
-      @latency_percentiles.observe(latency)
       @latency_histogram.observe(latency)
     end
 
     def record_failure(latency)
       @bucket.hit_failure
       @last_error_at = @bucket.timestamp
-      @latency_percentiles.observe(latency)
       @latency_histogram.observe(latency)
     end
 
     def record_timeout(latency)
       @bucket.hit_timeout
       @last_error_at = @bucket.timestamp
-      @latency_percentiles.observe(latency)
       @latency_histogram.observe(latency)
     end
 
@@ -111,7 +97,6 @@ module CircuitBreaker
 
     Metrics = Struct.new(:success, :failure, :timeout, :short_circuited,
                          :latency_count, :latency_sum,
-                         :latency_percentiles,
                          :latency_buckets)
 
     class Bucket
@@ -163,6 +148,10 @@ module CircuitBreaker
         end
       }
       @sum += value
+    end
+
+    def observations
+      @cumulative_counts[-1]
     end
   end
 end
