@@ -54,7 +54,7 @@ RSpec.describe CircuitBreaker::InprocBreaker do
   it 'short-circuits a request when the error threshold reached' do
     @dut.underlying.request_volume_threshold.times do |i|
       begin
-        @dut.request { raise StandardError if i >= 5 }
+        @dut.request { Timecop.travel(@dut.request_timeout + 0.1) if i >= 5 }
       rescue
       end
     end
@@ -65,7 +65,7 @@ RSpec.describe CircuitBreaker::InprocBreaker do
       expect(work).to eq(0)
       expect(@dut.metrics.short_circuited).to eq(1)
       expect(@dut.metrics.success).to eq(5)
-      expect(@dut.metrics.failure).to eq(5)
+      expect(@dut.metrics.timeout).to eq(5)
       expect(e.message).to eq("test is open")
     else
       fail
