@@ -23,7 +23,10 @@ module CircuitBreaker
       @state = :closed
     end
 
-    def request
+    def request(bypass=false)
+      if bypass
+        return yield
+      end
       allow = allow_request?
       state = allow ? :closed : :open
       @logger.warn("Circuit #{@name} changed the state to #{state}") if @state != state

@@ -7,7 +7,7 @@ RSpec.describe CircuitBreaker::InprocBreaker do
     @dut = CircuitBreaker::InprocBreaker.new(:test, {}, $logger, CircuitBreaker::NoopMonitor.new)
   end
 
-  it 'executes the given block' do
+  it 'executes the given block through the circuit breaker' do
     work = 0
     value = @dut.request {
       work += 1
@@ -15,6 +15,18 @@ RSpec.describe CircuitBreaker::InprocBreaker do
     }
     expect(work).to eq(1)
     expect(value).to eq(42)
+    expect(@dut.metrics.success).to eq(1)
+  end
+
+  it 'executes the given block without the circuit breaker' do
+    work = 0
+    value = @dut.request(true) {
+      work += 1
+      42
+    }
+    expect(work).to eq(1)
+    expect(value).to eq(42)
+    expect(@dut.metrics.success).to eq(0)
   end
 
   it 'records a request as success' do
