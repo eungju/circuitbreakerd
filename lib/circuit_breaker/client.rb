@@ -5,7 +5,8 @@ require_relative 'remote'
 require_relative 'monitor'
 
 module CircuitBreaker
-  class ShortCircuitedError < StandardError; end
+  class ShortCircuitedError < StandardError
+  end
 
   class BreakerProxy
     attr_reader :request_timeout, :tolerable_errors
@@ -33,7 +34,7 @@ module CircuitBreaker
           v = yield
         rescue => e
           latency = Time.now - started_at
-          if @tolerable_errors.any? { |error_class| e.kind_of?(error_class) }
+          if @tolerable_errors.any? {|error_class| e.kind_of?(error_class)}
             handle_success(latency)
           else
             record_failure(latency)
@@ -173,12 +174,12 @@ module CircuitBreaker
     def initialize(options = {})
       options = {timeout: 0.1, reconnect_attempt: 0}.merge!(options)
       @original_client = @client = Redis::Client.new(options)
-      @queue = Hash.new { |h, k| h[k] = [] }
+      @queue = Hash.new {|h, k| h[k] = []}
       super()
     end
 
     def synchronize
-      mon_synchronize { yield(@client) }
+      mon_synchronize {yield(@client)}
     end
 
     def with_reconnect(val=true, &blk)
@@ -198,6 +199,7 @@ module CircuitBreaker
     def close
       @original_client.disconnect
     end
+
     alias disconnect! close
 
     def install(name, options)
@@ -305,12 +307,12 @@ module CircuitBreaker
     # where the method call will return nil. Propagate the nil instead of falsely
     # returning false.
     Boolify =
-        lambda { |value|
+        lambda {|value|
           value == 1 if value
         }
 
     BoolifySet =
-        lambda { |value|
+        lambda {|value|
           if value && "OK" == value
             true
           else
@@ -319,7 +321,7 @@ module CircuitBreaker
         }
 
     Hashify =
-        lambda { |array|
+        lambda {|array|
           hash = Hash.new
           array.each_slice(2) do |field, value|
             hash[field] = value
@@ -328,7 +330,7 @@ module CircuitBreaker
         }
 
     Floatify =
-        lambda { |str|
+        lambda {|str|
           if str
             if (inf = str.match(/^(-)?inf/i))
               (inf[1] ? -1.0 : 1.0) / 0.0
@@ -339,7 +341,7 @@ module CircuitBreaker
         }
 
     FloatifyPairs =
-        lambda { |array|
+        lambda {|array|
           if array
             array.each_slice(2).map do |member, score|
               [member, Floatify.call(score)]
