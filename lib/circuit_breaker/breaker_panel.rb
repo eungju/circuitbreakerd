@@ -5,16 +5,19 @@ module CircuitBreaker
   module BreakerPanel
     @@client = nil
     @@logger = nil
+    @@options = nil
     @@monitor = nil
 
-    def self.initialize(client, logger, monitor)
+
+    def self.initialize(client, logger, options, monitor)
       @@client = client
       @@logger = logger
+      @@options = options
       @@monitor = monitor
     end
 
     def install_breaker(name, options={})
-      RemoteBreaker.new(name, options, @@logger, @@monitor, @@client)
+      RemoteBreaker.new(name, @@options.merge(options), @@logger, @@monitor, @@client)
     end
 
     def relay_through(target_method, breaker)
