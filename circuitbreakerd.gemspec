@@ -36,6 +36,6 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "timecop", "~> 0.9"
   spec.add_runtime_dependency "eventmachine", "~> 1.2"
   spec.add_runtime_dependency "hiredis", "~> 0.6"
-  spec.add_runtime_dependency "redis", "~> 3.2"
+  spec.add_runtime_dependency "redis", "~> 4.1"
   spec.add_runtime_dependency "daemons", "~> 1.2"
 end
